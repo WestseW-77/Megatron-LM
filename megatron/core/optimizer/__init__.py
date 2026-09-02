@@ -777,12 +777,21 @@ def _get_megatron_emerging_optimizer(
 
     log_single_rank(logger, logging.INFO, f'Setting up emerging optimizer with config {config}')
 
-    # Tag parameters with optimizer-specific attributes (expert_tp, is_qkv).
-    for model_chunk in model_chunks:
+    # Tag parameters with optimizer-specific attributes (expert_tp, is_qkv),
+    # plus stable local metadata used by the opt-in SOAP diagnostics.  These
+    # attributes do not participate in optimizer math or checkpoint state.
+    pipeline_parallel_rank = get_pg_rank(pg_collection.pp)
+    tensor_parallel_rank = get_pg_rank(pg_collection.tp)
+    for model_chunk_index, model_chunk in enumerate(model_chunks):
         qkv_split_shapes = None
         for name, param in model_chunk.named_parameters():
             if not param.requires_grad:
                 continue
+            param._soap_tracking_parameter_name = (
+                f"model_chunk_{model_chunk_index}.{name}"
+            )
+            param._soap_tracking_pipeline_parallel_rank = pipeline_parallel_rank
+            param._soap_tracking_tensor_parallel_rank = tensor_parallel_rank
             if 'experts' in name and 'shared' not in name:
                 param.expert_tp = True
             # TODO(deyuf): support MLA

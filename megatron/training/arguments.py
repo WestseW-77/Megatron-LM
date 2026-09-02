@@ -2553,6 +2553,11 @@ def _add_regularization_args(parser):
     group.add_argument('--lion-beta2', type=float, default=0.98,
                        help='Second beta coefficient for Lion optimizer '
                        '(used in momentum EMA update). Default: 0.98.')
+    group.add_argument('--soap-qr-backend', type=str, default='torch',
+                       choices=['torch', 'hsolver'],
+                       help='QR backend for SOAP orthogonal iteration.')
+    group.add_argument('--soap-qr-hsolver-min-dimension', type=int, default=2048,
+                       help='Minimum square-matrix dimension routed to Hsolver by SOAP.')
 
     group.add_argument('--no-weight-decay-cond-type', type=str, choices=['apply_wd_to_qk_layernorm'],
                        help='Type of no weight decay condition. Choices: '

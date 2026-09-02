@@ -182,6 +182,13 @@ def copy_optimizer_param_metadata(destination: torch.Tensor, source: torch.Tenso
         destination.shared = source.shared
     if hasattr(source, GRAD_NORM_GROUP_ATTR):
         setattr(destination, GRAD_NORM_GROUP_ATTR, getattr(source, GRAD_NORM_GROUP_ATTR))
+    for attribute in (
+        '_soap_tracking_parameter_name',
+        '_soap_tracking_pipeline_parallel_rank',
+        '_soap_tracking_tensor_parallel_rank',
+    ):
+        if hasattr(source, attribute):
+            setattr(destination, attribute, getattr(source, attribute))
 
 
 class MegatronOptimizer(ABC):

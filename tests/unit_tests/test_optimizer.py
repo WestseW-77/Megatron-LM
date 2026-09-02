@@ -91,6 +91,20 @@ def test_copy_optimizer_param_metadata_preserves_allreduce():
     assert destination.allreduce is False
 
 
+def test_copy_optimizer_param_metadata_preserves_soap_tracking_fields():
+    source = torch.empty(1)
+    destination = torch.empty_like(source)
+    source._soap_tracking_parameter_name = 'model_chunk_0.decoder.layers.3.weight'
+    source._soap_tracking_pipeline_parallel_rank = 1
+    source._soap_tracking_tensor_parallel_rank = 0
+
+    copy_optimizer_param_metadata(destination, source)
+
+    assert destination._soap_tracking_parameter_name == source._soap_tracking_parameter_name
+    assert destination._soap_tracking_pipeline_parallel_rank == 1
+    assert destination._soap_tracking_tensor_parallel_rank == 0
+
+
 @patch('torch.distributed.get_world_size', return_value=1)
 @patch(
     'torch.distributed.all_gather_object', lambda output_list, obj: output_list.__setitem__(0, obj)

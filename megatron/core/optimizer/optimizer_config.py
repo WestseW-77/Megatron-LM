@@ -309,6 +309,12 @@ class OptimizerConfig:
     soap_use_kl_shampoo: bool = True
     """Whether to use the KL-Shampoo preconditioner."""
 
+    soap_qr_backend: str = "torch"
+    """QR backend for SOAP orthogonal iteration: ``torch`` or ``hsolver``."""
+
+    soap_qr_hsolver_min_dimension: int = 2048
+    """Minimum square-matrix dimension that SOAP routes to Hsolver."""
+
     adaptive_muon_moment2_method: str = "adamuon"
     """The method to use for the moment2 update in Adaptive Muon optimizer."""
 
