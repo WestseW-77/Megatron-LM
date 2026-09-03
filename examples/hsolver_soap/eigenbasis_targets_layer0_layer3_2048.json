@@ -1,0 +1,23 @@
+{
+  "purpose": "Independent-trajectory spectral diagnostics for representative layer-0 and layer-3 SOAP factors.",
+  "targets": [
+    {
+      "label": "pp0_global_layer0_attention_proj_right",
+      "rank": 0,
+      "group_index": 0,
+      "param_index": 0,
+      "axis_index": 1,
+      "dimension": 2048,
+      "sample_columns": 2048
+    },
+    {
+      "label": "pp0_global_layer3_attention_proj_right",
+      "rank": 0,
+      "group_index": 0,
+      "param_index": 12,
+      "axis_index": 1,
+      "dimension": 2048,
+      "sample_columns": 2048
+    }
+  ]
+}

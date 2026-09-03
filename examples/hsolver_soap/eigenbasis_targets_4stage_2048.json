@@ -1,0 +1,42 @@
+{
+  "selection_rule": "On TP rank 0, select the lower-middle transformer layer from each eight-layer pipeline stage and track the 2048-dimensional right SOAP factor of self_attention.linear_proj.weight.",
+  "global_layers": [3, 11, 19, 27],
+  "targets": [
+    {
+      "label": "pp0_global_layer3_attention_proj_right",
+      "rank": 0,
+      "group_index": 0,
+      "param_index": 12,
+      "axis_index": 1,
+      "dimension": 2048,
+      "sample_columns": 2048
+    },
+    {
+      "label": "pp1_global_layer11_attention_proj_right",
+      "rank": 2,
+      "group_index": 0,
+      "param_index": 12,
+      "axis_index": 1,
+      "dimension": 2048,
+      "sample_columns": 2048
+    },
+    {
+      "label": "pp2_global_layer19_attention_proj_right",
+      "rank": 4,
+      "group_index": 0,
+      "param_index": 12,
+      "axis_index": 1,
+      "dimension": 2048,
+      "sample_columns": 2048
+    },
+    {
+      "label": "pp3_global_layer27_attention_proj_right",
+      "rank": 6,
+      "group_index": 0,
+      "param_index": 12,
+      "axis_index": 1,
+      "dimension": 2048,
+      "sample_columns": 2048
+    }
+  ]
+}
