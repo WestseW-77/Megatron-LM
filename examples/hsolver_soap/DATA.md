@@ -1,5 +1,9 @@
 # Reproducing the SOAP 8B pretraining data
 
+This document describes the original small development corpus. The formal
+100B high-quality real-text corpus and its deterministic sampling procedure are
+documented separately in [NEMOTRON_CC_100B.md](NEMOTRON_CC_100B.md).
+
 This experiment uses one pinned shard from NVIDIA's public
 `Nemotron-Pretraining-Dataset-sample` repository. The generated JSONL and
 Megatron indexed dataset are local build artifacts and are not distributed
@@ -126,4 +130,3 @@ hashes match and refuses to overwrite mismatched outputs.
 | Derived `tokenizer_config.json` | `9a4c2659ce205101e66178b891f29d450c394edf3fa3c0944503379f3d0a0416` |
 | Megatron `.bin` | `2ac059d4295f3c1e5600f4ab47d44bb22bac9717e655519166686de3f8e0fa3e` |
 | Megatron `.idx` | `4df050a7b382da46c20ebd80eb736c6cbad3ab510a5c3d0bc5c6d0fa7dd99e5d` |
-
