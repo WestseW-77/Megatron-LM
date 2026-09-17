@@ -160,6 +160,11 @@ def get_batch(data_iterator, vp_stage: Optional[int] = None):
         is_pipeline_last_stage=mpu.is_pipeline_last_stage(),
     )
 
+    # BlendedDataset may attach provenance fields such as ``dataset_id``.
+    # They are not sequence tensors and must not be passed to CP partitioning,
+    # which partitions every non-metadata tensor along a sequence dimension.
+    batch = {key: batch[key] for key in BATCH_KEYS}
+
     batch = flatten_batch_for_packed_sequences(batch)
 
     if not is_first_or_last_pipeline_stage(vp_stage) and not mtp_on_this_rank:
