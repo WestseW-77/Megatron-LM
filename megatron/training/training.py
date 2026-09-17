@@ -157,6 +157,7 @@ from megatron.training.utils import is_gtp_remat_active, is_hybrid_model
 
 # Local.
 from . import ft_integration, one_logger_utils
+from .optimizer_fraction_profiler import OptimizerFractionProfiler
 from .activation_logging import (
     disable_activation_logging,
     disable_tokens_per_expert_logging,
@@ -2446,7 +2447,7 @@ def dummy_train_step(data_iterator):
             )
 
 
-def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_scheduler, config, forward_backward_func, iteration=None, pg_collection: Optional[ProcessGroupCollection | MultiModuleProcessGroupCollection] = None, p2p_communicator: Optional[P2PCommunicator] = None):
+def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_scheduler, config, forward_backward_func, iteration=None, pg_collection: Optional[ProcessGroupCollection | MultiModuleProcessGroupCollection] = None, p2p_communicator: Optional[P2PCommunicator] = None, optimizer_fraction_profiler: Optional[OptimizerFractionProfiler] = None):
     """Single training step.
 
     pg_collection: optional carrier forwarded to the schedule for the cross-grid case; None
@@ -2585,6 +2586,11 @@ def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_sch
 
     # Update parameters.
 
+    if optimizer_fraction_profiler is not None:
+        if iteration is None:
+            raise ValueError("optimizer fraction profiling requires an iteration number")
+        profile_iteration = iteration + 1
+        optimizer_fraction_profiler.start_optimizer(profile_iteration)
     timers('optimizer', log_level=1).start(barrier=args.barrier_with_L1_time)
     update_successful, grad_norm, num_zeros_in_grad = optimizer.step()
 
@@ -2595,6 +2601,8 @@ def train_step(forward_step_func, data_iterator, model, optimizer, opt_param_sch
         log_max_attention_logit = clip_qk(model, log_max_only=not args.qk_clip)
 
     timers('optimizer').stop()
+    if optimizer_fraction_profiler is not None:
+        optimizer_fraction_profiler.stop_optimizer(profile_iteration)
 
     # Checkpoint params with parameter names.
     if save_params_in_this_iteration:
@@ -3478,6 +3486,7 @@ def train(
     """
     args = get_args()
     timers = get_timers()
+    optimizer_fraction_profiler = OptimizerFractionProfiler.from_args(args)
     fault_injector_kwargs = {}
     for f in dataclasses.fields(FaultInjectorConfig):
         if hasattr(args, f.name):
@@ -3961,6 +3970,9 @@ def train(
             max_attention_logit = None
         else:
             ft_integration.on_training_step_start()
+            profile_iteration = iteration + 1
+            if optimizer_fraction_profiler is not None:
+                optimizer_fraction_profiler.start_step(profile_iteration)
             (
                 loss_dict,
                 skipped_iter,
@@ -3974,7 +3986,10 @@ def train(
                 forward_step_func, train_data_iterator, model, optimizer, opt_param_scheduler, config, forward_backward_func, iteration=iteration,
                 pg_collection=pg_collection,
                 p2p_communicator=p2p_communicator,
+                optimizer_fraction_profiler=optimizer_fraction_profiler,
             )
+            if optimizer_fraction_profiler is not None:
+                optimizer_fraction_profiler.stop_step(profile_iteration)
             ft_integration.on_training_step_end()
             if _maybe_raise_workload_exception is not None and iteration != start_iteration:
                 _maybe_raise_workload_exception()

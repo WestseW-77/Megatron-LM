@@ -2788,6 +2788,14 @@ def _add_training_args(parser):
                        help='Offload optimizer state to CPU')
     group.add_argument('--optimizer-cuda-graph', action='store_true',
                        help='Enable CUDA graph for optimizer step')
+    group.add_argument('--profile-optimizer-fraction', action='store_true',
+                       help='Record CUDA-event train-step and optimizer timings.')
+    group.add_argument('--profile-optimizer-start-iteration', type=int, default=20,
+                       help='First training iteration included in optimizer fraction profiling.')
+    group.add_argument('--profile-optimizer-end-iteration', type=int, default=30,
+                       help='Last training iteration included in optimizer fraction profiling.')
+    group.add_argument('--profile-optimizer-output-dir', type=str, default=None,
+                       help='Directory for rank-local optimizer fraction timing CSV files.')
     group.add_argument('--optimizer-offload-fraction', type=float, default=1.0,
                           help='Ratio of optimizer state to offload to CPU')
     group.add_argument('--use-torch-optimizer-for-cpu-offload', action='store_true',
