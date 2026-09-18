@@ -2790,6 +2790,8 @@ def _add_training_args(parser):
                        help='Enable CUDA graph for optimizer step')
     group.add_argument('--profile-optimizer-fraction', action='store_true',
                        help='Record CUDA-event train-step and optimizer timings.')
+    group.add_argument('--profile-soap-qr', action='store_true',
+                       help='Record per-call SOAP QR CUDA-event timings alongside optimizer profiling.')
     group.add_argument('--profile-optimizer-start-iteration', type=int, default=20,
                        help='First training iteration included in optimizer fraction profiling.')
     group.add_argument('--profile-optimizer-end-iteration', type=int, default=30,

@@ -21,6 +21,18 @@ class _IterationEvents:
     step_end: torch.cuda.Event | None = None
 
 
+@dataclass
+class _QRCallEvents:
+    iteration: int
+    requested_backend: str
+    actual_backend: str
+    rows: int
+    columns: int
+    dtype: str
+    start: torch.cuda.Event
+    end: torch.cuda.Event | None = None
+
+
 class OptimizerFractionProfiler:
     """Record rank-local train-step and optimizer durations with CUDA events.
 
@@ -35,6 +47,7 @@ class OptimizerFractionProfiler:
         end_iteration: int,
         output_dir: str,
         global_batch_size: int,
+        profile_soap_qr: bool = False,
     ):
         if start_iteration < 1:
             raise ValueError("optimizer profiling start iteration must be at least 1")
@@ -50,14 +63,28 @@ class OptimizerFractionProfiler:
         self.rank = torch.distributed.get_rank()
         self.world_size = torch.distributed.get_world_size()
         self.device = torch.cuda.current_device()
+        self.profile_soap_qr = profile_soap_qr
         self._events: list[_IterationEvents] = []
+        self._qr_events: list[_QRCallEvents] = []
         self._active: _IterationEvents | None = None
         self._written = False
+        self._eig_utils = None
+        if self.profile_soap_qr:
+            from emerging_optimizers.utils import eig as eig_utils
+
+            eig_utils.set_qr_timing_observer(self)
+            self._eig_utils = eig_utils
 
     @classmethod
     def from_args(cls, args):
-        if not getattr(args, "profile_optimizer_fraction", False):
+        profile_optimizer_fraction = getattr(args, "profile_optimizer_fraction", False)
+        profile_soap_qr = getattr(args, "profile_soap_qr", False)
+        if profile_soap_qr and not profile_optimizer_fraction:
+            raise ValueError("--profile-soap-qr requires --profile-optimizer-fraction")
+        if not profile_optimizer_fraction:
             return None
+        if profile_soap_qr and args.optimizer != "soap":
+            raise ValueError("--profile-soap-qr requires --optimizer soap")
         if args.profile_optimizer_end_iteration > args.train_iters:
             raise ValueError(
                 "optimizer profiling end iteration "
@@ -68,6 +95,7 @@ class OptimizerFractionProfiler:
             end_iteration=args.profile_optimizer_end_iteration,
             output_dir=args.profile_optimizer_output_dir,
             global_batch_size=args.global_batch_size,
+            profile_soap_qr=profile_soap_qr,
         )
 
     def _in_window(self, iteration: int) -> bool:
@@ -105,6 +133,41 @@ class OptimizerFractionProfiler:
         event = self._new_event()
         event.record()
         self._active.optimizer_end = event
+
+    def start_qr(
+        self,
+        *,
+        requested_backend: str,
+        actual_backend: str,
+        matrix: torch.Tensor,
+    ) -> _QRCallEvents | None:
+        """Record the start of one SOAP QR call on its current CUDA stream."""
+        if not self.profile_soap_qr:
+            return None
+        if self._active is None or self._active.optimizer_start is None:
+            return None
+        event = self._new_event()
+        event.record()
+        return _QRCallEvents(
+            iteration=self._active.iteration,
+            requested_backend=requested_backend,
+            actual_backend=actual_backend,
+            rows=matrix.shape[0],
+            columns=matrix.shape[1],
+            dtype=str(matrix.dtype).removeprefix("torch."),
+            start=event,
+        )
+
+    def stop_qr(self, token: object | None) -> None:
+        """Record the end of a SOAP QR call started by :meth:`start_qr`."""
+        if token is None:
+            return
+        if not isinstance(token, _QRCallEvents):
+            raise TypeError(f"unexpected SOAP QR timing token: {type(token)!r}")
+        event = self._new_event()
+        event.record()
+        token.end = event
+        self._qr_events.append(token)
 
     def stop_step(self, iteration: int) -> None:
         if not self._in_window(iteration):
@@ -166,4 +229,61 @@ class OptimizerFractionProfiler:
                     }
                 )
         temporary_path.replace(output_path)
+        if self.profile_soap_qr:
+            self._write_qr_results()
+            assert self._eig_utils is not None
+            self._eig_utils.set_qr_timing_observer(None)
         self._written = True
+
+    def _write_qr_results(self) -> None:
+        expected_iterations = set(range(self.start_iteration, self.end_iteration + 1))
+        observed_iterations = {events.iteration for events in self._qr_events}
+        if observed_iterations != expected_iterations:
+            raise RuntimeError(
+                "SOAP QR profiler observed iterations "
+                f"{sorted(observed_iterations)}; expected {sorted(expected_iterations)}"
+            )
+        if any(events.end is None for events in self._qr_events):
+            raise RuntimeError("SOAP QR profiler has an unfinished QR call")
+
+        output_path = self.output_dir / f"qr_timing_rank{self.rank}.csv"
+        temporary_path = output_path.with_suffix(".csv.tmp")
+        fieldnames = [
+            "iteration",
+            "rank",
+            "world_size",
+            "cuda_device",
+            "global_batch_size",
+            "call_index",
+            "requested_backend",
+            "actual_backend",
+            "rows",
+            "columns",
+            "dtype",
+            "qr_ms",
+        ]
+        call_counts: dict[int, int] = {}
+        with temporary_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for events in self._qr_events:
+                call_index = call_counts.get(events.iteration, 0)
+                call_counts[events.iteration] = call_index + 1
+                assert events.end is not None
+                writer.writerow(
+                    {
+                        "iteration": events.iteration,
+                        "rank": self.rank,
+                        "world_size": self.world_size,
+                        "cuda_device": self.device,
+                        "global_batch_size": self.global_batch_size,
+                        "call_index": call_index,
+                        "requested_backend": events.requested_backend,
+                        "actual_backend": events.actual_backend,
+                        "rows": events.rows,
+                        "columns": events.columns,
+                        "dtype": events.dtype,
+                        "qr_ms": f"{events.start.elapsed_time(events.end):.6f}",
+                    }
+                )
+        temporary_path.replace(output_path)
